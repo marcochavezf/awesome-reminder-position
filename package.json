@@ -99,6 +99,7 @@
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
-		"jsonc-parser": "^2.2.0"
+		"jsonc-parser": "^2.2.0",
+		"lodash": "^4.17.15"
 	}
 }

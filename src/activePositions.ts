@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as json from 'jsonc-parser';
 import * as path from 'path';
+import * as _ from 'lodash';
 
 export class ActivePositionsProvider implements vscode.TreeDataProvider<number> {
 
@@ -10,7 +11,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 	private tree: json.Node;
 	private text: string;
 	private editor: vscode.TextEditor;
-	private autoRefresh: boolean = true; 
+	private autoRefresh: boolean = true;
+	private positions: {
+		[key: string]: any
+	};
 
 	constructor(private context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeActiveTextEditor(() => this.onActiveEditorChanged());
@@ -21,14 +25,97 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 			this.autoRefresh = vscode.workspace.getConfiguration('activePositions').get('autorefresh');
 		});
 		this.onActiveEditorChanged();
-		5
+		
+		this.positions = {};
 		setInterval(() => {
 			const activeEditor = vscode.window.activeTextEditor;
-			if (activeEditor) {
-				const currentLine = activeEditor.selection.active.line;
-				console.log(currentLine);
+			if (!activeEditor) {
+				return;
 			}
+			const activeSelection = activeEditor.selection.active;
+
+			// create or get lastDocument
+			const document: vscode.TextDocument = activeEditor.document;
+			let lastMetaDoc = this.positions[document.fileName];
+			if (!lastMetaDoc) {
+				lastMetaDoc = this.positions[document.fileName] = {
+					lineCount: document.lineCount,
+					lineData: {},
+					textLines: document.getText().split('\n'),
+				};
+			}
+
+			// update all the positions if the lineCount has changed
+			if (lastMetaDoc.lineCount !== document.lineCount) {
+				const currentTextLines = document.getText().split('\n'); 
+				const prevLineData = lastMetaDoc.lineData;
+				const prevTextLines = lastMetaDoc.textLines;
+				let delta = document.lineCount - lastMetaDoc.lineCount;
+				lastMetaDoc.lineData = {};
+				let applyDelta = false;
+				_.each(prevLineData, ({ weight, text }, line) => {
+					const lineNumber = parseInt(line);
+					if (!applyDelta && this.isSameLine(prevTextLines, currentTextLines, lineNumber)) {
+						lastMetaDoc.lineData[lineNumber] = { weight, text };
+					} else if (this.isSameLine(prevTextLines, currentTextLines, lineNumber + delta)) {
+						applyDelta = true;
+						lastMetaDoc.lineData[lineNumber + delta] = { weight, text };
+					}
+					if (!lastMetaDoc.lineData[lineNumber]) {
+						const newLineNumber = this.getCurrentLine(text, currentTextLines, lineNumber + delta);
+						if (newLineNumber) {
+							lastMetaDoc.lineData[newLineNumber] = { weight, text };
+						} else {
+							// debugger;
+							// console.error('not able to get current line!');
+						}
+					}
+					console.log(`delta applied: ${ applyDelta }, delta: ${ delta }`)
+				}); 
+				lastMetaDoc.lineCount = document.lineCount;
+				lastMetaDoc.textLines = currentTextLines;
+			}
+
+			// update the number of times the positions was active per second
+			const line = activeSelection.line;
+			lastMetaDoc.lineData[line] = lastMetaDoc.lineData[line] || { weight: 0 };
+			lastMetaDoc.lineData[line].weight++;
+			lastMetaDoc.lineData[line].text = document.lineAt(line).text;
+			console.log(`currentLine: ${ line }, weight: ${ lastMetaDoc.lineData[line].weight }, text: ${ document.lineAt(line).text }`);
 		}, 1000);
+	}
+
+	compareText(textA, textB){
+		return textA.replace(/(\r\n|\n|\r)/gm, '') === textB.replace(/(\r\n|\n|\r)/gm, '');
+	}
+
+	getCurrentLine(currentText, currentTextLines, guessLineNumber) {
+		const upperLineNumber = guessLineNumber === 1 ? 1 : guessLineNumber - 1;
+		if (this.compareText(currentTextLines[upperLineNumber - 1], currentText)) {
+			return upperLineNumber - 1;
+		}
+		const lowerLineNumber = guessLineNumber >= currentTextLines.length ? 1 : guessLineNumber + 1;
+		if (this.compareText(currentTextLines[lowerLineNumber - 1], currentText)) {
+			return lowerLineNumber - 1;
+		}
+	}
+
+	isSameLine(prevTextLines, currentTextLines, lineNumber, ignoreNeighbours = false) {
+		if (lineNumber > prevTextLines.length || lineNumber > currentTextLines.length) {
+			return false;
+		}
+		
+		const isSameLine = this.compareText(prevTextLines[lineNumber - 1], currentTextLines[lineNumber - 1]);
+		if (ignoreNeighbours) {
+			return isSameLine;
+		}
+
+		const lineUpper = lineNumber === 1 ? 1 : lineNumber - 1;
+		const lineLower = lineNumber + 1;
+
+		const isSameUpperLine = this.isSameLine(prevTextLines, currentTextLines, lineUpper, true);
+		const isSameLowerLine = this.isSameLine(prevTextLines, currentTextLines, lineLower, true);
+		return isSameUpperLine && isSameLowerLine && isSameLine;
 	}
 
 	refresh(offset?: number): void {
