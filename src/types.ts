@@ -4,7 +4,9 @@ export interface Positions {
 
 export interface MetaDoc {
     lineCount: number;
-    lineData: LineData;
+    linesData: {
+        [lineNumber:string]: LineData
+    };
     textLines: string[];
 }
 

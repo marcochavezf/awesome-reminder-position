@@ -38,7 +38,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 			if (!lastMetaDoc) {
 				lastMetaDoc = this.positions[document.fileName] = {
 					lineCount: document.lineCount,
-					lineData: { weight: 0, text: '' },
+					linesData: {},
 					textLines: document.getText().split('\n'),
 				};
 			}
@@ -46,23 +46,23 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 			// update all the positions if the lineCount has changed
 			if (lastMetaDoc.lineCount !== document.lineCount) {
 				const currentTextLines = document.getText().split('\n'); 
-				const prevLineData = lastMetaDoc.lineData;
+				const prevLinesData = lastMetaDoc.linesData;
 				const prevTextLines = lastMetaDoc.textLines;
 				let delta = document.lineCount - lastMetaDoc.lineCount;
-				lastMetaDoc.lineData = { weight: 0, text: '' };
+				lastMetaDoc.linesData = {};
 				let applyDelta = false;
-				_.each(prevLineData, ({ weight, text }, line) => {
+				_.each(prevLinesData, ({ weight, text }, line) => {
 					const lineNumber = parseInt(line);
 					if (!applyDelta && this.isSameLine(prevTextLines, currentTextLines, lineNumber)) {
-						lastMetaDoc.lineData[lineNumber] = { weight, text };
+						lastMetaDoc.linesData[lineNumber] = { weight, text };
 					} else if (this.isSameLine(prevTextLines, currentTextLines, lineNumber + delta)) {
 						applyDelta = true;
-						lastMetaDoc.lineData[lineNumber + delta] = { weight, text };
+						lastMetaDoc.linesData[lineNumber + delta] = { weight, text };
 					}
-					if (!lastMetaDoc.lineData[lineNumber]) {
+					if (!lastMetaDoc.linesData[lineNumber]) {
 						const newLineNumber = this.getCurrentLine(text, currentTextLines, lineNumber + delta);
 						if (newLineNumber) {
-							lastMetaDoc.lineData[newLineNumber] = { weight, text };
+							lastMetaDoc.linesData[newLineNumber] = { weight, text };
 						} else {
 							// debugger;
 							// console.error('not able to get current line!');
@@ -76,10 +76,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 
 			// update the number of times the positions was active per second
 			const line = activeSelection.line;
-			const lineData: LineData = lastMetaDoc.lineData[line] || { weight: 0, text: '' };
+			const lineData: LineData = lastMetaDoc.linesData[line] || { weight: 0, text: '' };
 			lineData.weight++;
 			lineData.text = document.lineAt(line).text;
-			lastMetaDoc.lineData[line] = lineData;
+			lastMetaDoc.linesData[line] = lineData;
 			console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
 		}, 1000);
 	}
