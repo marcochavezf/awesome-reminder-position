@@ -1,15 +1,12 @@
-import { Positions, MetaDoc, LineData } from './types';
+import { Positions, MetaDoc, LineData, PositionData } from './types';
 import * as vscode from 'vscode';
-import * as json from 'jsonc-parser';
 import * as path from 'path';
 import * as _ from 'lodash';
-export class ActivePositionsProvider implements vscode.TreeDataProvider<number> {
+export class ActivePositionsProvider implements vscode.TreeDataProvider<PositionData> {
 
-	private _onDidChangeTreeData: vscode.EventEmitter<number | null> = new vscode.EventEmitter<number | null>();
-	readonly onDidChangeTreeData: vscode.Event<number | null> = this._onDidChangeTreeData.event;
+	private _onDidChangeTreeData: vscode.EventEmitter<PositionData | null> = new vscode.EventEmitter<PositionData | null>();
+	readonly onDidChangeTreeData: vscode.Event<PositionData | null> = this._onDidChangeTreeData.event;
 
-	private tree: json.Node;
-	private text: string;
 	private editor: vscode.TextEditor;
 	private autoRefresh: boolean = true;
 	private positions: Positions;
@@ -17,7 +14,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 	constructor(private context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeActiveTextEditor(() => this.onActiveEditorChanged());
 		vscode.workspace.onDidChangeTextDocument(e => this.onDocumentChanged(e));
-		this.parseTree();
+
 		this.autoRefresh = vscode.workspace.getConfiguration('activePositions').get('autorefresh');
 		vscode.workspace.onDidChangeConfiguration(() => {
 			this.autoRefresh = vscode.workspace.getConfiguration('activePositions').get('autorefresh');
@@ -25,12 +22,19 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 		this.onActiveEditorChanged();
 		
 		this.positions = {};
+		const TIME_INTERVAL = 1000; // 1 second
+		const TIME_UPDATE_TIMESTAMP = 5000; // every 5 seconds
+		const ITERATIONS_TO_UPDATE_TIMESTAMP = TIME_UPDATE_TIMESTAMP / TIME_INTERVAL;
+
+		let timesLasPosActive = 0;
+		let lastActivePos: PositionData = { fileName: '', lineNumber: '' };
 		setInterval(() => {
 			const activeEditor = vscode.window.activeTextEditor;
 			if (!activeEditor) {
 				return;
 			}
-			const activeSelection = activeEditor.selection.active;
+			let updateTreeView = false;
+			const { active } = activeEditor.selection;
 
 			// create or get lastDocument
 			const document: vscode.TextDocument = activeEditor.document;
@@ -40,6 +44,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 					lineCount: document.lineCount,
 					linesData: {},
 					textLines: document.getText().split('\n'),
+					textDocument: document,
 				};
 			}
 
@@ -68,20 +73,40 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 							// console.error('not able to get current line!');
 						}
 					}
-					console.log(`delta applied: ${ applyDelta }, delta: ${ delta }`);
+					// console.log(`delta applied: ${ applyDelta }, delta: ${ delta }`);
 				}); 
 				lastMetaDoc.lineCount = document.lineCount;
 				lastMetaDoc.textLines = currentTextLines;
+				updateTreeView = true;
 			}
 
 			// update the number of times the positions was active per second
-			const line = activeSelection.line;
+			const line = active.line;
 			const lineData: LineData = lastMetaDoc.linesData[line] || { weight: 0, text: '' };
 			lineData.weight++;
 			lineData.text = document.lineAt(line).text;
+			delete lastMetaDoc.linesData[line];
 			lastMetaDoc.linesData[line] = lineData;
-			console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
-		}, 1000);
+			// console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
+			
+			// set lastTimeActive acording to TIME_UPDATE_TIMESTAMP
+			if (lastActivePos.fileName === document.fileName || parseInt(lastActivePos.lineNumber) === line) {
+				timesLasPosActive++;
+			} else {
+				timesLasPosActive = 0;
+				lastActivePos.fileName = document.fileName;
+				lastActivePos.lineNumber = `${line}`;
+			}
+			if (timesLasPosActive >= ITERATIONS_TO_UPDATE_TIMESTAMP) {
+				timesLasPosActive = 0;
+				lineData.lastTimeActive = Date.now();
+				updateTreeView = true;
+			}
+
+			if (updateTreeView) {
+				this._onDidChangeTreeData.fire();
+			}
+		}, TIME_INTERVAL);
 	}
 
 	private compareText(textA, textB){
@@ -117,8 +142,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 		return isSameUpperLine && isSameLowerLine && isSameLine;
 	}
 
-	refresh(offset?: number): void {
-		this.parseTree();
+	refresh(offset?: PositionData): void {
 		if (offset) {
 			this._onDidChangeTreeData.fire(offset);
 		} else {
@@ -126,35 +150,16 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 		}
 	}
 
-	rename(offset: number): void {
-		vscode.window.showInputBox({ placeHolder: 'Enter the new label' })
-			.then(value => {
-				if (value !== null && value !== undefined) {
-					this.editor.edit(editBuilder => {
-						const path = json.getLocation(this.text, offset).path;
-						let propertyNode = json.findNodeAtLocation(this.tree, path);
-						if (propertyNode.parent.type !== 'array') {
-							propertyNode = propertyNode.parent.children[0];
-						}
-						const range = new vscode.Range(this.editor.document.positionAt(propertyNode.offset), this.editor.document.positionAt(propertyNode.offset + propertyNode.length));
-						editBuilder.replace(range, `"${value}"`);
-						setTimeout(() => {
-							this.parseTree();
-							this.refresh(offset);
-						}, 100);
-					});
-				}
-			});
-	}
-
 	private onActiveEditorChanged(): void {
 		if (vscode.window.activeTextEditor) {
 			if (vscode.window.activeTextEditor.document.uri.scheme === 'file') {
-				const enabled = vscode.window.activeTextEditor.document.languageId === 'json' || vscode.window.activeTextEditor.document.languageId === 'jsonc';
-				vscode.commands.executeCommand('setContext', 'activePositionsEnabled', enabled);
-				if (enabled) {
-					this.refresh();
-				}
+				// const enabled = vscode.window.activeTextEditor.document.languageId === 'json' || vscode.window.activeTextEditor.document.languageId === 'jsonc';
+				// vscode.commands.executeCommand('setContext', 'activePositionsEnabled', enabled);
+				// if (enabled) {
+				// 	this.refresh();
+				// }
+				this.refresh();
+				vscode.commands.executeCommand('setContext', 'activePositionsEnabled', true);
 			}
 		} else {
 			vscode.commands.executeCommand('setContext', 'activePositionsEnabled', false);
@@ -162,117 +167,128 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<number> 
 	}
 
 	private onDocumentChanged(changeEvent: vscode.TextDocumentChangeEvent): void {
+		// debugger;
 		if (this.autoRefresh && changeEvent.document.uri.toString() === this.editor.document.uri.toString()) {
 			for (const change of changeEvent.contentChanges) {
-				const path = json.getLocation(this.text, this.editor.document.offsetAt(change.range.start)).path;
-				path.pop();
-				const node = path.length ? json.findNodeAtLocation(this.tree, path) : void 0;
-				this.parseTree();
-				this._onDidChangeTreeData.fire(node ? node.offset : void 0);
+				// const path = json.getLocation(this.text, this.editor.document.offsetAt(change.range.start)).path;
+				// path.pop();
+				// const node = path.length ? json.findNodeAtLocation(this.tree, path) : void 0;
+				// this.parseTree();
+				// this._onDidChangeTreeData.fire(node ? node.offset : void 0);
 			}
 		}
 	}
 
-	private parseTree(): void {
-		this.text = '';
-		this.tree = null;
-		this.editor = vscode.window.activeTextEditor;
-		if (this.editor && this.editor.document) {
-			this.text = this.editor.document.getText();
-			this.tree = json.parseTree(this.text);
-		}
+	getChildren(): Thenable<PositionData[]> {
+		// if (offset) {
+		// 	const { fileName } = offset;
+		// 	const metaDoc: MetaDoc = this.positions[fileName];
+		// 	const { linesData } = metaDoc;
+		// 	const lineNumbers = Object.keys(linesData);
+		// 	const fileOffsets: PositionData[] = lineNumbers
+		// 		.filter(lineNumber => !!linesData[lineNumber].lastTimeActive)
+		// 		.sort((lineA, lineB) => linesData[lineB].lastTimeActive - linesData[lineA].lastTimeActive)
+		// 		.map(lineNumber => ({ fileName, lineNumber }));
+		// 	return Promise.resolve(fileOffsets);
+		// } else {
+		// 	const fileOffsets: PositionData[] = Object.keys(this.positions).map(fileName => ({ fileName })); 
+		// 	return Promise.resolve(fileOffsets);
+		// }
+		const fileNames = Object.keys(this.positions);
+		const allPositions = fileNames.reduce((totalPos, fileName) => {
+			const metaDoc: MetaDoc = this.positions[fileName];
+			const { linesData } = metaDoc;
+			const lineNumbers = Object.keys(linesData);
+			const posData: PositionData[] = lineNumbers
+				.filter(lineNumber => !!linesData[lineNumber].lastTimeActive)
+				.map(lineNumber => ({ fileName, lineNumber }));
+			return [...totalPos, ...posData];
+		}, []).sort((posDataA: PositionData, posDataB: PositionData) => {
+			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
+		});		
+		return Promise.resolve(allPositions);
 	}
 
-	getChildren(offset?: number): Thenable<number[]> {
-		if (offset) {
-			const path = json.getLocation(this.text, offset).path;
-			const node = json.findNodeAtLocation(this.tree, path);
-			return Promise.resolve(this.getChildrenOffsets(node));
-		} else {
-			return Promise.resolve(this.tree ? this.getChildrenOffsets(this.tree) : []);
-		}
+	getLastTimeActive(posData: PositionData) {
+		const { fileName, lineNumber } = posData;
+		return this.positions[fileName].linesData[lineNumber].lastTimeActive;
 	}
 
-	private getChildrenOffsets(node: json.Node): number[] {
-		const offsets: number[] = [];
-		for (const child of node.children) {
-			const childPath = json.getLocation(this.text, child.offset).path;
-			const childNode = json.findNodeAtLocation(this.tree, childPath);
-			if (childNode) {
-				offsets.push(childNode.offset);
-			}
-		}
-		return offsets;
+	getTreeItem(posData: PositionData): vscode.TreeItem {
+		const { fileName, lineNumber } = posData;
+		const hasChildren = !lineNumber;
+
+		const filePaths = fileName.split('\\');
+		const fileNameShort = filePaths[filePaths.length - 1];
+		const { text, weight } = this.positions[fileName].linesData[lineNumber];
+		const label = `${ fileNameShort }:${ lineNumber } -> ${ text.trim() } (${ weight })`;
+		const treeItem: vscode.TreeItem = new vscode.TreeItem(label, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
+		treeItem.command = {
+			command: 'extension.setPosition',
+			title: '',
+			// arguments: [new vscode.Range(this.editor.document.positionAt(valueNode.offset), this.editor.document.positionAt(valueNode.offset + valueNode.length))]
+			arguments: [posData]
+		};
+		// treeItem.iconPath = this.getIcon(hasChildren);
+		// treeItem.contextValue = valueNode.type;
+		return treeItem;
 	}
 
-	getTreeItem(offset: number): vscode.TreeItem {
-		const path = json.getLocation(this.text, offset).path;
-		const valueNode = json.findNodeAtLocation(this.tree, path);
-		if (valueNode) {
-			let hasChildren = valueNode.type === 'object' || valueNode.type === 'array';
-			let treeItem: vscode.TreeItem = new vscode.TreeItem(this.getLabel(valueNode), hasChildren ? valueNode.type === 'object' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
-			treeItem.command = {
-				command: 'extension.openJsonSelection',
-				title: '',
-				arguments: [new vscode.Range(this.editor.document.positionAt(valueNode.offset), this.editor.document.positionAt(valueNode.offset + valueNode.length))]
+	select(posData: PositionData) {
+		const { fileName, lineNumber } = posData;
+		const activeEditor = vscode.window.activeTextEditor;
+		if (!activeEditor) {
+			return;
+		}
+		
+		const { textDocument } = this.positions[fileName]; 
+		vscode.window.showTextDocument(textDocument).then(e => {
+			const posLineNumber = parseInt(lineNumber);
+			const newPosition = activeEditor.selection.active.with(posLineNumber, 0);
+			const newSelection = new vscode.Selection(newPosition, newPosition);
+			activeEditor.selection = newSelection;
+			activeEditor.revealRange(new vscode.Range(newPosition, newPosition));
+		});
+	}
+
+	private getIcon(hasChildren: boolean): any {
+		if (hasChildren) {
+			return {
+				light: this.context.asAbsolutePath(path.join('resources', 'light', 'dependency.svg')),
+				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'dependency.svg'))
 			};
-			treeItem.iconPath = this.getIcon(valueNode);
-			treeItem.contextValue = valueNode.type;
-			return treeItem;
-		}
-		return null;
-	}
-
-	select(range: vscode.Range) {
-		this.editor.selection = new vscode.Selection(range.start, range.end);
-	}
-
-	private getIcon(node: json.Node): any {
-		let nodeType = node.type;
-		if (nodeType === 'boolean') {
+		} else {
 			return {
 				light: this.context.asAbsolutePath(path.join('resources', 'light', 'boolean.svg')),
 				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'boolean.svg'))
 			};
 		}
-		if (nodeType === 'string') {
-			return {
-				light: this.context.asAbsolutePath(path.join('resources', 'light', 'string.svg')),
-				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'string.svg'))
-			};
-		}
-		if (nodeType === 'number') {
-			return {
-				light: this.context.asAbsolutePath(path.join('resources', 'light', 'number.svg')),
-				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'number.svg'))
-			};
-		}
-		return null;
 	}
 
-	private getLabel(node: json.Node): string {
-		if (node.parent.type === 'array') {
-			let prefix = node.parent.children.indexOf(node).toString();
-			if (node.type === 'object') {
-				return prefix + ':{ }';
-			}
-			if (node.type === 'array') {
-				return prefix + ':[ ]';
-			}
-			return prefix + ':' + node.value.toString();
-		}
-		else {
-			const property = node.parent.children[0].value.toString();
-			if (node.type === 'array' || node.type === 'object') {
-				if (node.type === 'object') {
-					return '{ } ' + property;
-				}
-				if (node.type === 'array') {
-					return '[ ] ' + property;
-				}
-			}
-			const value = this.editor.document.getText(new vscode.Range(this.editor.document.positionAt(node.offset), this.editor.document.positionAt(node.offset + node.length)));
-			return `${property}: ${value}`;
-		}
-	}
+// 	private getLabel(node: json.Node): string {
+// 		if (node.parent.type === 'array') {
+// 			let prefix = node.parent.children.indexOf(node).toString();
+// 			if (node.type === 'object') {
+// 				return prefix + ':{ }';
+// 			}
+// 			if (node.type === 'array') {
+// 				return prefix + ':[ ]';
+// 			}
+// 			return prefix + ':' + node.value.toString();
+// 		}
+// 		else {
+// 			const property = node.parent.children[0].value.toString();
+// 			if (node.type === 'array' || node.type === 'object') {
+// 				if (node.type === 'object') {
+// 					return '{ } ' + property;
+// 				}
+// 				if (node.type === 'array') {
+// 					return '[ ] ' + property;
+// 				}
+// 			}
+// 			const value = this.editor.document.getText(new vscode.Range(this.editor.document.positionAt(node.offset), this.editor.document.positionAt(node.offset + node.length)));
+// 			return `${property}: ${value}`;
+// 		}
+// 	}
+
 }

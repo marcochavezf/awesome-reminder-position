@@ -9,10 +9,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const activePosProvider = new ActivePositionsProvider(context);
 	vscode.window.registerTreeDataProvider('activePositions', activePosProvider);
-	vscode.commands.registerCommand('activePositions.refresh', () => activePosProvider.refresh());
-	vscode.commands.registerCommand('activePositions.refreshNode', offset => activePosProvider.refresh(offset));
-	vscode.commands.registerCommand('activePositions.renameNode', offset => activePosProvider.rename(offset));
-	vscode.commands.registerCommand('extension.openJsonSelection', range => activePosProvider.select(range));
+	// vscode.commands.registerCommand('activePositions.refresh', () => activePosProvider.refresh());
+	// vscode.commands.registerCommand('activePositions.refreshNode', offset => activePosProvider.refresh(offset));
+	// vscode.commands.registerCommand('activePositions.renameNode', offset => activePosProvider.rename(offset));
+	// vscode.commands.registerCommand('extension.openJsonSelection', range => activePosProvider.select(range));
+	vscode.commands.registerCommand('extension.setPosition', posData => activePosProvider.select(posData));
 }
 
 // this method is called when your extension is deactivated
