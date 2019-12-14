@@ -2,11 +2,16 @@
 	"name": "awesome-reminder-position",
 	"displayName": "awesome-reminder-position",
 	"description": "Track positions in your code",
+	"publisher": "Awesome-Reminder-Position",
 	"version": "0.0.1",
-	"enableProposedApi": true,
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:marcochavezf/awesome-reminder-position.git"
+	},
 	"engines": {
 		"vscode": "^1.40.0"
 	},
+	
 	"categories": [
 		"Other"
 	],
