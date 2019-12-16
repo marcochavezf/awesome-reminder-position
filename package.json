@@ -3,11 +3,7 @@
 	"displayName": "awesome-reminder-position",
 	"description": "Track positions in your code",
 	"publisher": "Awesome-Reminder-Position",
-	"version": "0.0.2",
-	"repository": {
-		"type": "git",
-		"url": "git@github.com:marcochavezf/awesome-reminder-position.git"
-	},
+	"version": "0.0.3",
 	"engines": {
 		"vscode": "^1.40.0"
 	},
@@ -44,10 +40,6 @@
 				"title": "Refresh",
 				"icon": {
 					"light": "resources/light/refresh.svg",
-
-
-
-
 					"dark": "resources/dark/refresh.svg"
 				}
 			},
@@ -107,7 +99,6 @@
 		"vscode-test": "^1.2.2"
 	},
 	"dependencies": {
-		"jsonc-parser": "^2.2.0",
 		"lodash": "^4.17.15"
 	}
 }

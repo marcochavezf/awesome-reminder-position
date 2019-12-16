@@ -242,12 +242,12 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		}
 		
 		const { textDocument } = this.positions[fileName]; 
-		vscode.window.showTextDocument(textDocument).then(e => {
+		vscode.window.showTextDocument(textDocument).then(editor => {
 			const posLineNumber = parseInt(lineNumber);
-			const newPosition = activeEditor.selection.active.with(posLineNumber, 0);
+			const newPosition = editor.selection.active.with(posLineNumber);
 			const newSelection = new vscode.Selection(newPosition, newPosition);
-			activeEditor.selection = newSelection;
-			activeEditor.revealRange(new vscode.Range(newPosition, newPosition));
+			editor.selection = newSelection;
+			editor.revealRange(new vscode.Range(newPosition, newPosition));
 		});
 	}
 
