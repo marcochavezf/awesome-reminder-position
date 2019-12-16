@@ -56,18 +56,18 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 				let delta = document.lineCount - lastMetaDoc.lineCount;
 				lastMetaDoc.linesData = {};
 				let applyDelta = false;
-				_.each(prevLinesData, ({ weight, text }, line) => {
+				_.each(prevLinesData, (lineData: LineData, line) => {
 					const lineNumber = parseInt(line);
 					if (!applyDelta && this.isSameLine(prevTextLines, currentTextLines, lineNumber)) {
-						lastMetaDoc.linesData[lineNumber] = { weight, text };
+						lastMetaDoc.linesData[lineNumber] = lineData;
 					} else if (this.isSameLine(prevTextLines, currentTextLines, lineNumber + delta)) {
 						applyDelta = true;
-						lastMetaDoc.linesData[lineNumber + delta] = { weight, text };
+						lastMetaDoc.linesData[lineNumber + delta] = lineData;
 					}
 					if (!lastMetaDoc.linesData[lineNumber]) {
-						const newLineNumber = this.getCurrentLine(text, currentTextLines, lineNumber + delta);
+						const newLineNumber = this.getCurrentLine(lineData.text, currentTextLines, lineNumber + delta);
 						if (newLineNumber) {
-							lastMetaDoc.linesData[newLineNumber] = { weight, text };
+							lastMetaDoc.linesData[newLineNumber] = lineData;
 						} else {
 							// debugger;
 							// console.error('not able to get current line!');
@@ -82,11 +82,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 
 			// update the number of times the positions was active per second
 			const line = active.line;
-			const lineData: LineData = lastMetaDoc.linesData[line] || { weight: 0, text: '' };
-			lineData.weight++;
-			lineData.text = document.lineAt(line).text;
+			const updatedLineData: LineData = lastMetaDoc.linesData[line] || { weight: 0, text: '' };
+			updatedLineData.weight++;
+			updatedLineData.text = document.lineAt(line).text;
 			delete lastMetaDoc.linesData[line];
-			lastMetaDoc.linesData[line] = lineData;
+			lastMetaDoc.linesData[line] = updatedLineData;
 			// console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
 			
 			// set lastTimeActive acording to TIME_UPDATE_TIMESTAMP
@@ -99,7 +99,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			}
 			if (timesLasPosActive >= ITERATIONS_TO_UPDATE_TIMESTAMP) {
 				timesLasPosActive = 0;
-				lineData.lastTimeActive = Date.now();
+				updatedLineData.lastTimeActive = Date.now();
 				updateTreeView = true;
 			}
 
@@ -221,7 +221,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		const filePaths = fileName.split('\\');
 		const fileNameShort = filePaths[filePaths.length - 1];
 		const { text, weight } = this.positions[fileName].linesData[lineNumber];
-		const label = `${ fileNameShort }:${ lineNumber } -> ${ text.trim() } (${ weight })`;
+		const label = `${ fileNameShort }:${ parseInt(lineNumber) + 1 } -> ${ text.trim() } (${ weight })`;
 		const treeItem: vscode.TreeItem = new vscode.TreeItem(label, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		treeItem.command = {
 			command: 'extension.setPosition',
