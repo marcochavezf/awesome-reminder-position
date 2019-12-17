@@ -3,10 +3,11 @@
 	"displayName": "awesome-reminder-position",
 	"description": "Track positions in your code",
 	"publisher": "Awesome-Reminder-Position",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"engines": {
 		"vscode": "^1.40.0"
 	},
+	"repository": {},
 	"categories": [
 		"Other"
 	],

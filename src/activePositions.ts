@@ -81,21 +81,21 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			}
 
 			// update the number of times the positions was active per second
-			const line = active.line;
-			const updatedLineData: LineData = lastMetaDoc.linesData[line] || { weight: 0, text: '' };
+			const currentLine = active.line;
+			const updatedLineData: LineData = lastMetaDoc.linesData[currentLine] || { weight: 0, text: '' };
 			updatedLineData.weight++;
-			updatedLineData.text = document.lineAt(line).text;
-			delete lastMetaDoc.linesData[line];
-			lastMetaDoc.linesData[line] = updatedLineData;
+			updatedLineData.text = document.lineAt(currentLine).text;
+			delete lastMetaDoc.linesData[currentLine];
+			lastMetaDoc.linesData[currentLine] = updatedLineData;
 			// console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
 			
 			// set lastTimeActive acording to TIME_UPDATE_TIMESTAMP
-			if (lastActivePos.fileName === document.fileName || parseInt(lastActivePos.lineNumber) === line) {
+			if (lastActivePos.fileName === document.fileName && parseInt(lastActivePos.lineNumber) === currentLine) {
 				timesLasPosActive++;
 			} else {
 				timesLasPosActive = 0;
 				lastActivePos.fileName = document.fileName;
-				lastActivePos.lineNumber = `${line}`;
+				lastActivePos.lineNumber = `${currentLine}`;
 			}
 			if (timesLasPosActive >= ITERATIONS_TO_UPDATE_TIMESTAMP) {
 				timesLasPosActive = 0;
@@ -194,18 +194,31 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		// 	const fileOffsets: PositionData[] = Object.keys(this.positions).map(fileName => ({ fileName })); 
 		// 	return Promise.resolve(fileOffsets);
 		// }
+		const limitTimeExpiration = 1000 * 60 * 60 * 4; // 4 hours
 		const fileNames = Object.keys(this.positions);
 		const allPositions = fileNames.reduce((totalPos, fileName) => {
 			const metaDoc: MetaDoc = this.positions[fileName];
 			const { linesData } = metaDoc;
 			const lineNumbers = Object.keys(linesData);
 			const posData: PositionData[] = lineNumbers
-				.filter(lineNumber => !!linesData[lineNumber].lastTimeActive)
+				.filter(lineNumber => { 
+					const { lastTimeActive } = linesData[lineNumber];
+					if (lastTimeActive) {
+						const hasExpired = (Date.now() - lastTimeActive) > limitTimeExpiration;
+						if (hasExpired) {
+							delete linesData[lineNumber]; // remove expired positions
+							return false;
+						} else {
+							return true;
+						}
+					}
+					return false;
+				})
 				.map(lineNumber => ({ fileName, lineNumber }));
 			return [...totalPos, ...posData];
 		}, []).sort((posDataA: PositionData, posDataB: PositionData) => {
 			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
-		});		
+		});
 		return Promise.resolve(allPositions);
 	}
 
@@ -218,7 +231,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		const { fileName, lineNumber } = posData;
 		const hasChildren = !lineNumber;
 
-		const filePaths = fileName.split('\\');
+		let filePaths = fileName.split('\\');
+		if (fileName.startsWith('/')) {
+			filePaths = fileName.split('/');
+		}
 		const fileNameShort = filePaths[filePaths.length - 1];
 		const { text, weight } = this.positions[fileName].linesData[lineNumber];
 		const label = `${ fileNameShort }:${ parseInt(lineNumber) + 1 } -> ${ text.trim() } (${ weight })`;
@@ -247,7 +263,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			const newPosition = editor.selection.active.with(posLineNumber);
 			const newSelection = new vscode.Selection(newPosition, newPosition);
 			editor.selection = newSelection;
-			editor.revealRange(new vscode.Range(newPosition, newPosition));
+
+			const upperLineNumber = posLineNumber - 10;
+			const upperPos = newPosition.with(upperLineNumber >= 0 ? upperLineNumber : 0);
+			editor.revealRange(new vscode.Range(upperPos, newPosition));
 		});
 	}
 
