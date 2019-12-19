@@ -3,7 +3,7 @@
 	"displayName": "awesome-reminder-position",
 	"description": "Track positions in your code",
 	"publisher": "Awesome-Reminder-Position",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"engines": {
 		"vscode": "^1.40.0"
 	},
@@ -29,43 +29,20 @@
 		},
 		"commands": [
 			{
-				"command": "activePositions.refresh",
-				"title": "Refresh",
+				"command": "activePositions.reset",
+				"title": "Reset",
 				"icon": {
 					"light": "resources/light/refresh.svg",
 					"dark": "resources/dark/refresh.svg"
 				}
-			},
-			{
-				"command": "activePositions.refreshNode",
-				"title": "Refresh",
-				"icon": {
-					"light": "resources/light/refresh.svg",
-					"dark": "resources/dark/refresh.svg"
-				}
-			},
-			{
-				"command": "activePositions.renameNode",
-				"title": "Rename"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
-					"command": "activePositions.refresh",
+					"command": "activePositions.reset",
 					"when": "view == activePositions",
 					"group": "navigation"
-				}
-			],
-			"view/item/context": [
-				{
-					"command": "activePositions.renameNode",
-					"when": "view == activePositions"
-				},
-				{
-					"command": "activePositions.refreshNode",
-					"when": "view == activePositions",
-					"group": "inline"
 				}
 			]
 		},

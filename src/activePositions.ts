@@ -142,6 +142,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		return isSameUpperLine && isSameLowerLine && isSameLine;
 	}
 
+	reset(): void {
+		this.positions = {};
+		this._onDidChangeTreeData.fire();
+	}
+
 	refresh(offset?: PositionData): void {
 		if (offset) {
 			this._onDidChangeTreeData.fire(offset);
