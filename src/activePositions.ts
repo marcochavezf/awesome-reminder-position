@@ -202,6 +202,9 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		const limitTimeExpiration = 1000 * 60 * 60 * 4; // 4 hours
 		const fileNames = Object.keys(this.positions);
 		const allPositions = fileNames.reduce((totalPos, fileName) => {
+			const OFFSET_MULTI_LINE_SELECTION = 5;
+			let pivotOffset = -1;
+
 			const metaDoc: MetaDoc = this.positions[fileName];
 			const { linesData } = metaDoc;
 			const lineNumbers = Object.keys(linesData);
@@ -218,8 +221,33 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 						}
 					}
 					return false;
-				})
-				.map(lineNumber => ({ fileName, lineNumber }));
+				}) // filter out expired lines
+				.sort() // sort by line number
+				.reduce((positionsData, lineNumber) => {
+					const lineNumberInt = parseInt(lineNumber);
+					if (lineNumberInt < pivotOffset) {
+						return positionsData;
+					}
+					pivotOffset = lineNumberInt + OFFSET_MULTI_LINE_SELECTION;
+					let endMultiLine = -1;
+					let lastActiveTime = this.getLastTimeActive({ fileName, lineNumber });
+					let mostActiveLineNumber = lineNumber;
+					for (let i = lineNumberInt + 1; i < pivotOffset; i++) {
+						endMultiLine = linesData[i] ? i : endMultiLine;
+						const endLineNumber = `${ i }`;
+						const endMultiTimeActive = linesData[i] ? this.getLastTimeActive({ fileName, lineNumber: endLineNumber }) : 0;
+						if (endMultiTimeActive && endMultiTimeActive > lastActiveTime) {
+							lastActiveTime = endMultiTimeActive;
+							mostActiveLineNumber = endLineNumber;
+						}
+					}
+					const newPosData: PositionData = { fileName, lineNumber: mostActiveLineNumber, lineNumbers: [lineNumber] };
+					if (endMultiLine >= 0) {
+						newPosData.lineNumbers.push(`${ endMultiLine }`);
+					}
+					return [...positionsData, newPosData];
+				}, []); // create a multi line group
+			
 			return [...totalPos, ...posData];
 		}, []).sort((posDataA: PositionData, posDataB: PositionData) => {
 			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
@@ -233,7 +261,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 	}
 
 	getTreeItem(posData: PositionData): vscode.TreeItem {
-		const { fileName, lineNumber } = posData;
+		const { fileName, lineNumber, lineNumbers } = posData;
 		const hasChildren = !lineNumber;
 
 		let filePaths = fileName.split('\\');
@@ -242,7 +270,8 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		}
 		const fileNameShort = filePaths[filePaths.length - 1];
 		const { text, weight } = this.positions[fileName].linesData[lineNumber];
-		const label = `${ fileNameShort }:${ parseInt(lineNumber) + 1 } -> ${ text.trim() } (${ weight })`;
+		const labelLine = hasChildren ? '' : lineNumbers.map(lineNum => parseInt(lineNum) + 1).join('-');
+		const label = `${ fileNameShort }:${ labelLine } -> ${ text.trim() } (${ weight })`;
 		const treeItem: vscode.TreeItem = new vscode.TreeItem(label, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		treeItem.command = {
 			command: 'extension.setPosition',
@@ -269,6 +298,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			const newSelection = new vscode.Selection(newPosition, newPosition);
 			editor.selection = newSelection;
 
+			// scroll to the given range
 			const upperLineNumber = posLineNumber - 10;
 			const upperPos = newPosition.with(upperLineNumber >= 0 ? upperLineNumber : 0);
 			editor.revealRange(new vscode.Range(upperPos, newPosition));
