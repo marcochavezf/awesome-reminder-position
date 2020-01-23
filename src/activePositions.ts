@@ -2,6 +2,7 @@ import { Positions, MetaDoc, LineData, PositionData } from './types';
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as _ from 'lodash';
+import * as timeago from 'timeago.js';
 export class ActivePositionsProvider implements vscode.TreeDataProvider<PositionData> {
 
 	private _onDidChangeTreeData: vscode.EventEmitter<PositionData | null> = new vscode.EventEmitter<PositionData | null>();
@@ -222,7 +223,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 					}
 					return false;
 				}) // filter out expired lines
-				.sort() // sort by line number
+				.sort((a, b) => parseInt(a) - parseInt(b)) // sort by line number
 				.reduce((positionsData, lineNumber) => {
 					const lineNumberInt = parseInt(lineNumber);
 					if (lineNumberInt < pivotOffset) {
@@ -269,9 +270,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			filePaths = fileName.split('/');
 		}
 		const fileNameShort = filePaths[filePaths.length - 1];
-		const { text, weight } = this.positions[fileName].linesData[lineNumber];
+		const { text, weight, lastTimeActive } = this.positions[fileName].linesData[lineNumber];
 		const labelLine = hasChildren ? '' : lineNumbers.map(lineNum => parseInt(lineNum) + 1).join('-');
-		const label = `${ fileNameShort }:${ labelLine } -> ${ text.trim() } (${ weight })`;
+		// const label = `${ fileNameShort }:${ labelLine } -> ${ text.trim() } (${ weight })`;
+		const label = `${ fileNameShort }:${ labelLine } (${ timeago.format(lastTimeActive) })`;
 		const treeItem: vscode.TreeItem = new vscode.TreeItem(label, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		treeItem.command = {
 			command: 'extension.setPosition',
