@@ -270,10 +270,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			filePaths = fileName.split('/');
 		}
 		const fileNameShort = filePaths[filePaths.length - 1];
-		const { text, weight, lastTimeActive } = this.positions[fileName].linesData[lineNumber];
+		const { linesData, textLines } = this.positions[fileName];
+		const { text, weight, lastTimeActive } = linesData[lineNumber];
 		const labelLine = hasChildren ? '' : lineNumbers.map(lineNum => parseInt(lineNum) + 1).join('-');
 		// const label = `${ fileNameShort }:${ labelLine } -> ${ text.trim() } (${ weight })`;
-		const label = `${ fileNameShort }:${ labelLine } (${ timeago.format(lastTimeActive) })`;
+		const label = `${ fileNameShort }:${ labelLine }`;
 		const treeItem: vscode.TreeItem = new vscode.TreeItem(label, hasChildren ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		treeItem.command = {
 			command: 'extension.setPosition',
@@ -281,6 +282,20 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			// arguments: [new vscode.Range(this.editor.document.positionAt(valueNode.offset), this.editor.document.positionAt(valueNode.offset + valueNode.length))]
 			arguments: [posData]
 		};
+		treeItem.description = `(${ timeago.format(lastTimeActive) })`;
+		if (!hasChildren) {
+			if (lineNumbers.length === 1) {
+				treeItem.tooltip = text.trim();
+			} else {
+				const lastPos = parseInt(_.last(lineNumbers));
+				const firstPos = parseInt(_.first(lineNumbers));
+				treeItem.tooltip =`...\n${ Array
+					.from({length: lastPos - firstPos + 1 }, (el, index) => firstPos + index)
+					.map(pos => textLines[pos])
+					.join('\n')}\n...`;
+			}
+		}
+		// treeItem.tooltip = `${ text.trim() } \n <b>asdf</b>${ textLines[lineNumber].trim() }`;
 		// treeItem.iconPath = this.getIcon(hasChildren);
 		// treeItem.contextValue = valueNode.type;
 		return treeItem;
