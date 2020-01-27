@@ -149,6 +149,15 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		this._onDidChangeTreeData.fire();
 	}
 
+	deleteItem(posData: PositionData): void {
+		const { fileName, lineNumbers } = posData;
+		const { linesData } = this.positions[fileName];
+		lineNumbers.forEach(lineNumber => {
+			delete linesData[lineNumber];
+		});
+		this._onDidChangeTreeData.fire();
+	}
+
 	refresh(offset?: PositionData): void {
 		if (offset) {
 			this._onDidChangeTreeData.fire(offset);
@@ -343,31 +352,4 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'indicator', `square-${ indicator }.svg`))
 		};
 	}
-
-// 	private getLabel(node: json.Node): string {
-// 		if (node.parent.type === 'array') {
-// 			let prefix = node.parent.children.indexOf(node).toString();
-// 			if (node.type === 'object') {
-// 				return prefix + ':{ }';
-// 			}
-// 			if (node.type === 'array') {
-// 				return prefix + ':[ ]';
-// 			}
-// 			return prefix + ':' + node.value.toString();
-// 		}
-// 		else {
-// 			const property = node.parent.children[0].value.toString();
-// 			if (node.type === 'array' || node.type === 'object') {
-// 				if (node.type === 'object') {
-// 					return '{ } ' + property;
-// 				}
-// 				if (node.type === 'array') {
-// 					return '[ ] ' + property;
-// 				}
-// 			}
-// 			const value = this.editor.document.getText(new vscode.Range(this.editor.document.positionAt(node.offset), this.editor.document.positionAt(node.offset + node.length)));
-// 			return `${property}: ${value}`;
-// 		}
-// 	}
-
 }

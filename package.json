@@ -3,7 +3,7 @@
 	"displayName": "awesome-reminder-position",
 	"description": "Track positions in your code",
 	"publisher": "Awesome-Reminder-Position",
-	"version": "0.0.9",
+	"version": "0.0.10",
 	"engines": {
 		"vscode": "^1.40.0"
 	},
@@ -35,6 +35,14 @@
 					"light": "resources/light/delete.svg",
 					"dark": "resources/dark/delete.svg"
 				}
+			},
+			{
+				"command": "activePositions.deleteItem",
+				"title": "Delete Item",
+				"icon": {
+					"light": "resources/light/delete.svg",
+					"dark": "resources/dark/delete.svg"
+				}
 			}
 		],
 		"menus": {
@@ -43,6 +51,13 @@
 					"command": "activePositions.deleteAll",
 					"when": "view == activePositions",
 					"group": "navigation"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "activePositions.deleteItem",
+					"when": "view == activePositions",
+					"group": "inline"
 				}
 			]
 		},
