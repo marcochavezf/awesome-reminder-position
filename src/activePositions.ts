@@ -11,6 +11,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 	private editor: vscode.TextEditor;
 	private autoRefresh: boolean = true;
 	private positions: Positions;
+	private maxWeight: number;
 
 	constructor(private context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeActiveTextEditor(() => this.onActiveEditorChanged());
@@ -143,7 +144,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		return isSameUpperLine && isSameLowerLine && isSameLine;
 	}
 
-	reset(): void {
+	deleteAll(): void {
 		this.positions = {};
 		this._onDidChangeTreeData.fire();
 	}
@@ -200,6 +201,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		// 	const fileOffsets: PositionData[] = Object.keys(this.positions).map(fileName => ({ fileName })); 
 		// 	return Promise.resolve(fileOffsets);
 		// }
+		let maxWeight = 0;
 		const limitTimeExpiration = 1000 * 60 * 60 * 4; // 4 hours
 		const fileNames = Object.keys(this.positions);
 		const allPositions = fileNames.reduce((totalPos, fileName) => {
@@ -230,6 +232,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 						return positionsData;
 					}
 					pivotOffset = lineNumberInt + OFFSET_MULTI_LINE_SELECTION;
+					let accumulatedWeight = this.getLineData({ fileName, lineNumber }).weight;
 					let endMultiLine = -1;
 					let lastActiveTime = this.getLastTimeActive({ fileName, lineNumber });
 					let mostActiveLineNumber = lineNumber;
@@ -237,14 +240,20 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 						endMultiLine = linesData[i] ? i : endMultiLine;
 						const endLineNumber = `${ i }`;
 						const endMultiTimeActive = linesData[i] ? this.getLastTimeActive({ fileName, lineNumber: endLineNumber }) : 0;
-						if (endMultiTimeActive && endMultiTimeActive > lastActiveTime) {
-							lastActiveTime = endMultiTimeActive;
-							mostActiveLineNumber = endLineNumber;
+						if (endMultiTimeActive) {
+							accumulatedWeight += this.getLineData({ fileName, lineNumber }).weight;
+							if (endMultiTimeActive > lastActiveTime) {
+								lastActiveTime = endMultiTimeActive;
+								mostActiveLineNumber = endLineNumber;
+							}
 						}
 					}
-					const newPosData: PositionData = { fileName, lineNumber: mostActiveLineNumber, lineNumbers: [lineNumber] };
+					const newPosData: PositionData = { fileName, lineNumber: mostActiveLineNumber, lineNumbers: [lineNumber], accumulatedWeight };
 					if (endMultiLine >= 0) {
 						newPosData.lineNumbers.push(`${ endMultiLine }`);
+					}
+					if (maxWeight < accumulatedWeight) {
+						maxWeight = accumulatedWeight;
 					}
 					return [...positionsData, newPosData];
 				}, []); // create a multi line group
@@ -253,16 +262,21 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		}, []).sort((posDataA: PositionData, posDataB: PositionData) => {
 			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
 		});
+		this.maxWeight = maxWeight;
 		return Promise.resolve(allPositions);
 	}
 
-	getLastTimeActive(posData: PositionData) {
+	getLineData(posData: PositionData): LineData {
 		const { fileName, lineNumber } = posData;
-		return this.positions[fileName].linesData[lineNumber].lastTimeActive;
+		return this.positions[fileName].linesData[lineNumber];
+	}
+
+	getLastTimeActive(posData: PositionData) {
+		return this.getLineData(posData).lastTimeActive;
 	}
 
 	getTreeItem(posData: PositionData): vscode.TreeItem {
-		const { fileName, lineNumber, lineNumbers } = posData;
+		const { fileName, lineNumber, lineNumbers, accumulatedWeight } = posData;
 		const hasChildren = !lineNumber;
 
 		let filePaths = fileName.split('\\');
@@ -295,8 +309,9 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 					.join('\n')}\n...`;
 			}
 		}
-		// treeItem.tooltip = `${ text.trim() } \n <b>asdf</b>${ textLines[lineNumber].trim() }`;
-		// treeItem.iconPath = this.getIcon(hasChildren);
+		// we want to get values from 1 to 10
+		const indicator = Math.min(Math.floor(accumulatedWeight/this.maxWeight * 10) + 1, 10);
+		treeItem.iconPath = this.getIcon(indicator);
 		// treeItem.contextValue = valueNode.type;
 		return treeItem;
 	}
@@ -322,18 +337,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		});
 	}
 
-	private getIcon(hasChildren: boolean): any {
-		if (hasChildren) {
-			return {
-				light: this.context.asAbsolutePath(path.join('resources', 'light', 'dependency.svg')),
-				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'dependency.svg'))
-			};
-		} else {
-			return {
-				light: this.context.asAbsolutePath(path.join('resources', 'light', 'boolean.svg')),
-				dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'boolean.svg'))
-			};
-		}
+	private getIcon(indicator: number): any {
+		return {
+			light: this.context.asAbsolutePath(path.join('resources', 'light', 'indicator', `square-${ indicator }.svg`)),
+			dark: this.context.asAbsolutePath(path.join('resources', 'dark', 'indicator', `square-${ indicator }.svg`))
+		};
 	}
 
 // 	private getLabel(node: json.Node): string {

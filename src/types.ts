@@ -23,4 +23,5 @@ export interface PositionData {
     fileName: string;
     lineNumber?: string;
     lineNumbers?: string[];
+    accumulatedWeight?: number;
 }
