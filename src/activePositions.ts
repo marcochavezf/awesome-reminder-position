@@ -11,6 +11,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 	private editor: vscode.TextEditor;
 	private autoRefresh: boolean = true;
 	private positions: Positions;
+	private positionsToShow: Positions;
 	private maxWeight: number;
 
 	constructor(private context: vscode.ExtensionContext) {
@@ -24,6 +25,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		this.onActiveEditorChanged();
 		
 		this.positions = {};
+		this.positionsToShow = {};
 		const TIME_INTERVAL = 1000; // 1 second
 		const TIME_UPDATE_TIMESTAMP = 5000; // every 5 seconds
 		const ITERATIONS_TO_UPDATE_TIMESTAMP = TIME_UPDATE_TIMESTAMP / TIME_INTERVAL;
@@ -146,7 +148,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 
 	deleteAll(): void {
 		this.positions = {};
-		this._onDidChangeTreeData.fire();
+		this.updateList();
 	}
 
 	deleteItem(posData: PositionData): void {
@@ -155,7 +157,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		lineNumbers.forEach(lineNumber => {
 			delete linesData[lineNumber];
 		});
-		this._onDidChangeTreeData.fire();
+		this.updateList();
 	}
 
 	refresh(offset?: PositionData): void {
@@ -164,6 +166,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		} else {
 			this._onDidChangeTreeData.fire();
 		}
+	}
+
+	updateList(): void {
+		this.positionsToShow = _.cloneDeep(this.positions);
+		this.refresh();
 	}
 
 	private onActiveEditorChanged(): void {
@@ -212,12 +219,12 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		// }
 		let maxWeight = 0;
 		const limitTimeExpiration = 1000 * 60 * 60 * 4; // 4 hours
-		const fileNames = Object.keys(this.positions);
+		const fileNames = Object.keys(this.positionsToShow);
 		const allPositions = fileNames.reduce((totalPos, fileName) => {
 			const OFFSET_MULTI_LINE_SELECTION = 5;
 			let pivotOffset = -1;
 
-			const metaDoc: MetaDoc = this.positions[fileName];
+			const metaDoc: MetaDoc = this.positionsToShow[fileName];
 			const { linesData } = metaDoc;
 			const lineNumbers = Object.keys(linesData);
 			const posData: PositionData[] = lineNumbers
@@ -272,12 +279,16 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
 		});
 		this.maxWeight = maxWeight;
+		if (_.isEmpty(this.positionsToShow) && !_.isEmpty(this.positions)) {
+			const emptyPosition: any = {};
+			return Promise.resolve([emptyPosition]);
+		}
 		return Promise.resolve(allPositions);
 	}
 
 	getLineData(posData: PositionData): LineData {
 		const { fileName, lineNumber } = posData;
-		return this.positions[fileName].linesData[lineNumber];
+		return this.positionsToShow[fileName].linesData[lineNumber];
 	}
 
 	getLastTimeActive(posData: PositionData) {
@@ -285,6 +296,14 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 	}
 
 	getTreeItem(posData: PositionData): vscode.TreeItem {
+		if (_.isEmpty(posData)) {
+			const treeItem: vscode.TreeItem = new vscode.TreeItem('Update list to show positions...', vscode.TreeItemCollapsibleState.None);
+			treeItem.command = {
+				command: 'activePositions.updateList',
+				title: 'Update List'
+			};
+			return treeItem;
+		}
 		const { fileName, lineNumber, lineNumbers, accumulatedWeight } = posData;
 		const hasChildren = !lineNumber;
 
@@ -293,7 +312,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			filePaths = fileName.split('/');
 		}
 		const fileNameShort = filePaths[filePaths.length - 1];
-		const { linesData, textLines } = this.positions[fileName];
+		const { linesData, textLines } = this.positionsToShow[fileName];
 		const { text, weight, lastTimeActive } = linesData[lineNumber];
 		const labelLine = hasChildren ? '' : lineNumbers.map(lineNum => parseInt(lineNum) + 1).join('-');
 		// const label = `${ fileNameShort }:${ labelLine } -> ${ text.trim() } (${ weight })`;
@@ -305,7 +324,11 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			// arguments: [new vscode.Range(this.editor.document.positionAt(valueNode.offset), this.editor.document.positionAt(valueNode.offset + valueNode.length))]
 			arguments: [posData]
 		};
-		treeItem.description = `(${ timeago.format(lastTimeActive) })`;
+		let description = timeago.format(lastTimeActive);
+		if (description === 'just now') {
+			description = 'a few seconds ago';
+		}
+		treeItem.description = `(${ description })`;
 		if (!hasChildren) {
 			if (lineNumbers.length === 1) {
 				treeItem.tooltip = text.trim();
@@ -321,7 +344,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		// we want to get values from 1 to 10
 		const indicator = Math.min(Math.floor(accumulatedWeight/this.maxWeight * 10) + 1, 10);
 		treeItem.iconPath = this.getIcon(indicator);
-		// treeItem.contextValue = valueNode.type;
+		treeItem.contextValue = 'position';
 		return treeItem;
 	}
 

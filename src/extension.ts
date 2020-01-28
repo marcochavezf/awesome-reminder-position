@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.window.registerTreeDataProvider('activePositions', activePosProvider);
 	vscode.commands.registerCommand('activePositions.deleteAll', () => activePosProvider.deleteAll());
 	vscode.commands.registerCommand('activePositions.deleteItem', posData => activePosProvider.deleteItem(posData));
-	// vscode.commands.registerCommand('activePositions.refreshNode', offset => activePosProvider.refresh(offset));
+	vscode.commands.registerCommand('activePositions.updateList', () => activePosProvider.updateList());
 	// vscode.commands.registerCommand('activePositions.renameNode', offset => activePosProvider.rename(offset));
 	// vscode.commands.registerCommand('extension.openJsonSelection', range => activePosProvider.select(range));
 	vscode.commands.registerCommand('extension.setPosition', posData => activePosProvider.select(posData));
