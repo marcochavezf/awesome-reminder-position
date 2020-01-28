@@ -51,6 +51,22 @@
 					"light": "resources/light/refresh.svg",
 					"dark": "resources/dark/refresh.svg"
 				}
+			},
+			{
+				"command": "activePositions.sortByLastActive",
+				"title": "Sorted By File  (Click To Sort By Last Active)",
+				"icon": {
+					"light": "resources/light/sort-alpha-down.svg",
+					"dark": "resources/dark/sort-alpha-down.svg"
+				}
+			},
+			{
+				"command": "activePositions.sortByFile",
+				"title": "Sorted By Last Active (Click To Sort By File)",
+				"icon": {
+					"light": "resources/light/sort-numeric-down.svg",
+					"dark": "resources/dark/sort-numeric-down.svg"
+				}
 			}
 		],
 		"menus": {
@@ -58,6 +74,16 @@
 				{
 					"command": "activePositions.deleteAll",
 					"when": "view == activePositions"
+				},
+				{
+					"command": "activePositions.sortByFile",
+					"when": "view == activePositions && sortBy == lastActive",
+					"group": "navigation"
+				},
+				{
+					"command": "activePositions.sortByLastActive",
+					"when": "view == activePositions && sortBy == file",
+					"group": "navigation"
 				},
 				{
 					"command": "activePositions.updateList",

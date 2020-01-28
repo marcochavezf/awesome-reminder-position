@@ -12,8 +12,8 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.registerCommand('activePositions.deleteAll', () => activePosProvider.deleteAll());
 	vscode.commands.registerCommand('activePositions.deleteItem', posData => activePosProvider.deleteItem(posData));
 	vscode.commands.registerCommand('activePositions.updateList', () => activePosProvider.updateList());
-	// vscode.commands.registerCommand('activePositions.renameNode', offset => activePosProvider.rename(offset));
-	// vscode.commands.registerCommand('extension.openJsonSelection', range => activePosProvider.select(range));
+	vscode.commands.registerCommand('activePositions.sortByLastActive', () => activePosProvider.sortByLastActive());
+	vscode.commands.registerCommand('activePositions.sortByFile', () => activePosProvider.sortByFile());
 	vscode.commands.registerCommand('extension.setPosition', posData => activePosProvider.select(posData));
 }
 

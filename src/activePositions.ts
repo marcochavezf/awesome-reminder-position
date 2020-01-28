@@ -13,6 +13,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 	private positions: Positions;
 	private positionsToShow: Positions;
 	private maxWeight: number;
+	private sortBy: string;
+
+	private SORT_BY_LAST_ACTIVE = 'lastActive';
+	private SORT_BY_FILE = 'file';
 
 	constructor(private context: vscode.ExtensionContext) {
 		vscode.window.onDidChangeActiveTextEditor(() => this.onActiveEditorChanged());
@@ -23,6 +27,7 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			this.autoRefresh = vscode.workspace.getConfiguration('activePositions').get('autorefresh');
 		});
 		this.onActiveEditorChanged();
+		this.sortByLastActive();
 		
 		this.positions = {};
 		this.positionsToShow = {};
@@ -173,6 +178,20 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		this.refresh();
 	}
 
+	sortByLastActive(): void {
+		this.updateSortBy(this.SORT_BY_LAST_ACTIVE);
+	}
+	
+	sortByFile(): void {
+		this.updateSortBy(this.SORT_BY_FILE);
+	}
+
+	private updateSortBy(sortBy): void {
+		this.sortBy = sortBy;
+		vscode.commands.executeCommand('setContext', 'sortBy', sortBy);
+		this.updateList();
+	}
+
 	private onActiveEditorChanged(): void {
 		if (vscode.window.activeTextEditor) {
 			if (vscode.window.activeTextEditor.document.uri.scheme === 'file') {
@@ -220,7 +239,8 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		let maxWeight = 0;
 		const limitTimeExpiration = 1000 * 60 * 60 * 4; // 4 hours
 		const fileNames = Object.keys(this.positionsToShow);
-		const allPositions = fileNames.reduce((totalPos, fileName) => {
+		const sortedFileNames = this.sortBy === this.SORT_BY_FILE ? fileNames.sort() : fileNames;
+		const allPositions = sortedFileNames.reduce((totalPos, fileName) => {
 			const OFFSET_MULTI_LINE_SELECTION = 5;
 			let pivotOffset = -1;
 
@@ -275,15 +295,19 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 				}, []); // create a multi line group
 			
 			return [...totalPos, ...posData];
-		}, []).sort((posDataA: PositionData, posDataB: PositionData) => {
-			return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
-		});
+		}, []);
+		let sortedPositions = allPositions;
+		if (this.sortBy === this.SORT_BY_LAST_ACTIVE) { 
+			sortedPositions = allPositions.sort((posDataA: PositionData, posDataB: PositionData) => {
+				return this.getLastTimeActive(posDataB) - this.getLastTimeActive(posDataA);
+			});
+		}
 		this.maxWeight = maxWeight;
 		if (_.isEmpty(this.positionsToShow) && !_.isEmpty(this.positions)) {
 			const emptyPosition: any = {};
 			return Promise.resolve([emptyPosition]);
 		}
-		return Promise.resolve(allPositions);
+		return Promise.resolve(sortedPositions);
 	}
 
 	getLineData(posData: PositionData): LineData {
