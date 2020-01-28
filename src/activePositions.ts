@@ -32,11 +32,10 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 		this.positions = {};
 		this.positionsToShow = {};
 		const TIME_INTERVAL = 1000; // 1 second
-		const TIME_UPDATE_TIMESTAMP = 5000; // every 5 seconds
-		const ITERATIONS_TO_UPDATE_TIMESTAMP = TIME_UPDATE_TIMESTAMP / TIME_INTERVAL;
+		const TIME_UPDATE_TIMESTAMPS = 5000; // every 5 seconds
+		const ITERATIONS_TO_UPDATE_TIMESTAMPS = TIME_UPDATE_TIMESTAMPS / TIME_INTERVAL;
 
-		let timesLasPosActive = 0;
-		let lastActivePos: PositionData = { fileName: '', lineNumber: '' };
+		let counter = 0;
 		setInterval(() => {
 			const activeEditor = vscode.window.activeTextEditor;
 			if (!activeEditor) {
@@ -97,18 +96,12 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			delete lastMetaDoc.linesData[currentLine];
 			lastMetaDoc.linesData[currentLine] = updatedLineData;
 			// console.log(`currentLine: ${ line }, weight: ${lineData.weight }, text: ${ document.lineAt(line).text }`);
-			
-			// set lastTimeActive acording to TIME_UPDATE_TIMESTAMP
-			if (lastActivePos.fileName === document.fileName && parseInt(lastActivePos.lineNumber) === currentLine) {
-				timesLasPosActive++;
-			} else {
-				timesLasPosActive = 0;
-				lastActivePos.fileName = document.fileName;
-				lastActivePos.lineNumber = `${currentLine}`;
-			}
-			if (timesLasPosActive >= ITERATIONS_TO_UPDATE_TIMESTAMP) {
-				timesLasPosActive = 0;
-				updatedLineData.lastTimeActive = Date.now();
+
+			updatedLineData.lastTimeActive = Date.now();
+
+			counter++;
+			if (counter >= ITERATIONS_TO_UPDATE_TIMESTAMPS) {
+				counter = 0;
 				updateTreeView = true;
 			}
 
