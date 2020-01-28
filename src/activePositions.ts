@@ -363,9 +363,19 @@ export class ActivePositionsProvider implements vscode.TreeDataProvider<Position
 			editor.selection = newSelection;
 
 			// scroll to the given range
-			const upperLineNumber = posLineNumber - 10;
-			const upperPos = newPosition.with(upperLineNumber >= 0 ? upperLineNumber : 0);
-			editor.revealRange(new vscode.Range(upperPos, newPosition));
+
+			const visibleRange = _.first(editor.visibleRanges);
+			if (visibleRange) {
+				const linesRange = visibleRange.end.line - visibleRange.start.line;
+				const halfRange = Math.floor(linesRange / 2);
+				const newStart = Math.max(posLineNumber - halfRange, 0);
+				const newEnd = Math.min(posLineNumber + halfRange, textDocument.lineCount);
+				editor.revealRange(new vscode.Range(newStart, newStart, newEnd, newEnd));
+			} else {
+				const upperLineNumber = posLineNumber - 10;
+				const upperPos = newPosition.with(upperLineNumber >= 0 ? upperLineNumber : 0);
+				editor.revealRange(new vscode.Range(upperPos, newPosition));
+			}
 		});
 	}
 
