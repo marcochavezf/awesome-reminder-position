@@ -1,9 +1,9 @@
 {
 	"name": "awesome-reminder-position",
-	"displayName": "awesome-reminder-position",
-	"description": "Track positions in your code",
+	"displayName": "Last Active Positions",
+	"description": "VS Code extension to track and navigate through the last active lines of code",
 	"publisher": "Awesome-Reminder-Position",
-	"version": "0.0.12",
+	"version": "1.0.0",
 	"engines": {
 		"vscode": "^1.40.0"
 	},
